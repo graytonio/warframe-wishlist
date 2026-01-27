@@ -6,22 +6,24 @@ import (
 )
 
 type Config struct {
-	ServerPort       string
-	MongoURI         string
-	MongoDatabase    string
-	SupabaseURL      string
+	ServerPort        string
+	MongoURI          string
+	MongoDatabase     string
+	SupabaseURL       string
 	SupabaseJWTSecret string
-	AllowedOrigins   string
+	AllowedOrigins    string
+	LogLevel          string
 }
 
 func Load() *Config {
 	return &Config{
-		ServerPort:       getEnv("SERVER_PORT", "8080"),
-		MongoURI:         getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDatabase:    getEnv("MONGO_DATABASE", "warframe"),
-		SupabaseURL:      getEnv("SUPABASE_URL", ""),
+		ServerPort:        getEnv("SERVER_PORT", "8080"),
+		MongoURI:          getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDatabase:     getEnv("MONGO_DATABASE", "warframe"),
+		SupabaseURL:       getEnv("SUPABASE_URL", ""),
 		SupabaseJWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
-		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		AllowedOrigins:    getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
 	}
 }
 

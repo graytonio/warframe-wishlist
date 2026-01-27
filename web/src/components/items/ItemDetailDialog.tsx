@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Minus, ExternalLink } from 'lucide-react'
+import { Plus, Minus, ExternalLink, ArrowLeft } from 'lucide-react'
 
 interface ItemDetailDialogProps {
   uniqueName: string | null
@@ -29,17 +29,36 @@ export function ItemDetailDialog({
   const [item, setItem] = useState<Item | null>(null)
   const [loading, setLoading] = useState(false)
   const [quantity, setQuantity] = useState(1)
+  const [itemStack, setItemStack] = useState<string[]>([])
+
+  // Track the current item being viewed (either from stack or initial uniqueName)
+  const currentUniqueName = itemStack.length > 0 ? itemStack[itemStack.length - 1] : uniqueName
 
   useEffect(() => {
-    if (uniqueName && open) {
+    if (currentUniqueName && open) {
       setLoading(true)
       setQuantity(1)
-      api.getItem(uniqueName)
+      api.getItem(currentUniqueName)
         .then(setItem)
         .catch(() => setItem(null))
         .finally(() => setLoading(false))
     }
-  }, [uniqueName, open])
+  }, [currentUniqueName, open])
+
+  // Reset stack when dialog closes or initial uniqueName changes
+  useEffect(() => {
+    if (!open) {
+      setItemStack([])
+    }
+  }, [open, uniqueName])
+
+  const handleComponentClick = (componentUniqueName: string) => {
+    setItemStack([...itemStack, componentUniqueName])
+  }
+
+  const handleBack = () => {
+    setItemStack(itemStack.slice(0, -1))
+  }
 
   const imageUrl = item?.imageName
     ? `https://cdn.warframestat.us/img/${item.imageName}`
@@ -56,6 +75,16 @@ export function ItemDetailDialog({
           <>
             <DialogHeader>
               <div className="flex items-center gap-4">
+                {itemStack.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleBack}
+                    className="shrink-0"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                )}
                 <img
                   src={imageUrl}
                   alt={item.name}
@@ -91,26 +120,49 @@ export function ItemDetailDialog({
                 <div>
                   <h4 className="font-medium mb-2">Components Required</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {item.components.map((comp) => (
-                      <div
-                        key={comp.uniqueName}
-                        className="flex items-center gap-2 p-2 bg-muted rounded-md"
-                      >
-                        {comp.imageName && (
-                          <img
-                            src={`https://cdn.warframestat.us/img/${comp.imageName}`}
-                            alt={comp.name}
-                            className="w-8 h-8 object-contain"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{comp.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            x{comp.itemCount}
-                          </p>
+                    {item.components.map((comp) =>
+                      comp.hasOwnPage ? (
+                        <button
+                          key={comp.uniqueName}
+                          type="button"
+                          onClick={() => handleComponentClick(comp.uniqueName)}
+                          className="flex items-center gap-2 p-2 bg-muted rounded-md hover:bg-muted/80 transition-colors cursor-pointer text-left"
+                        >
+                          {comp.imageName && (
+                            <img
+                              src={`https://cdn.warframestat.us/img/${comp.imageName}`}
+                              alt={comp.name}
+                              className="w-8 h-8 object-contain"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{comp.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              x{comp.itemCount}
+                            </p>
+                          </div>
+                        </button>
+                      ) : (
+                        <div
+                          key={comp.uniqueName}
+                          className="flex items-center gap-2 p-2 bg-muted rounded-md"
+                        >
+                          {comp.imageName && (
+                            <img
+                              src={`https://cdn.warframestat.us/img/${comp.imageName}`}
+                              alt={comp.name}
+                              className="w-8 h-8 object-contain"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{comp.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              x{comp.itemCount}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    )}
                   </div>
                 </div>
               )}

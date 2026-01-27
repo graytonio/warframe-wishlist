@@ -156,7 +156,7 @@ func TestItemHandler_GetByUniqueName(t *testing.T) {
 			handler := NewItemHandler(mockService)
 
 			r := chi.NewRouter()
-			r.Get("/api/v1/items/{uniqueName}", handler.GetByUniqueName)
+			r.Get("/api/v1/items/*", handler.GetByUniqueName)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/items/"+tt.uniqueName, nil)
 			rec := httptest.NewRecorder()

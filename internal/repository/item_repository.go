@@ -6,6 +6,7 @@ import (
 
 	"github.com/graytonio/warframe-wishlist/internal/database"
 	"github.com/graytonio/warframe-wishlist/internal/models"
+	"github.com/graytonio/warframe-wishlist/pkg/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -27,6 +28,8 @@ func NewItemRepository(db *database.MongoDB) *ItemRepository {
 }
 
 func (r *ItemRepository) Search(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error) {
+	logger.Debug(ctx, "repo: ItemRepository.Search called", "query", params.Query, "category", params.Category, "limit", params.Limit, "offset", params.Offset)
+
 	var results []models.ItemSearchResult
 
 	limit := params.Limit
@@ -63,6 +66,7 @@ func (r *ItemRepository) Search(ctx context.Context, params models.SearchParams)
 		SetLimit(int64(limit)).
 		SetSkip(int64(offset))
 
+	logger.Debug(ctx, "repo: ItemRepository.Search - searching collections", "collectionCount", len(collections))
 	for _, collName := range collections {
 		collection := r.db.Collection(collName)
 
@@ -70,11 +74,13 @@ func (r *ItemRepository) Search(ctx context.Context, params models.SearchParams)
 		cursor, err := collection.Find(ctx, filter, findOptions)
 		cancel()
 		if err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.Search - error querying collection", "collection", collName, "error", err)
 			continue
 		}
 
 		var items []models.ItemSearchResult
 		if err := cursor.All(ctx, &items); err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.Search - error decoding results", "collection", collName, "error", err)
 			cursor.Close(ctx)
 			continue
 		}
@@ -84,6 +90,7 @@ func (r *ItemRepository) Search(ctx context.Context, params models.SearchParams)
 			items[i].Collection = collName
 		}
 
+		logger.Debug(ctx, "repo: ItemRepository.Search - found items in collection", "collection", collName, "count", len(items))
 		results = append(results, items...)
 
 		if len(results) >= limit {
@@ -92,10 +99,13 @@ func (r *ItemRepository) Search(ctx context.Context, params models.SearchParams)
 		}
 	}
 
+	logger.Debug(ctx, "repo: ItemRepository.Search - completed", "totalResults", len(results))
 	return results, nil
 }
 
 func (r *ItemRepository) FindByUniqueName(ctx context.Context, uniqueName string) (*models.Item, error) {
+	logger.Debug(ctx, "repo: ItemRepository.FindByUniqueName called", "uniqueName", uniqueName)
+
 	filter := bson.M{"uniqueName": uniqueName}
 
 	for _, collName := range ItemCollections {
@@ -108,17 +118,22 @@ func (r *ItemRepository) FindByUniqueName(ctx context.Context, uniqueName string
 
 		if err == nil {
 			item.Collection = collName
+			logger.Debug(ctx, "repo: ItemRepository.FindByUniqueName - found item", "uniqueName", uniqueName, "collection", collName, "itemName", item.Name)
 			return &item, nil
 		}
 	}
 
+	logger.Debug(ctx, "repo: ItemRepository.FindByUniqueName - item not found", "uniqueName", uniqueName)
 	return nil, nil
 }
 
 func (r *ItemRepository) FindByUniqueNames(ctx context.Context, uniqueNames []string) (map[string]*models.Item, error) {
+	logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames called", "count", len(uniqueNames))
+
 	result := make(map[string]*models.Item)
 
 	if len(uniqueNames) == 0 {
+		logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - empty input, returning empty result")
 		return result, nil
 	}
 
@@ -131,21 +146,27 @@ func (r *ItemRepository) FindByUniqueNames(ctx context.Context, uniqueNames []st
 		cursor, err := collection.Find(ctx, filter)
 		cancel()
 		if err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - error querying collection", "collection", collName, "error", err)
 			continue
 		}
 
 		var items []models.Item
 		if err := cursor.All(ctx, &items); err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - error decoding results", "collection", collName, "error", err)
 			cursor.Close(ctx)
 			continue
 		}
 		cursor.Close(ctx)
 
+		if len(items) > 0 {
+			logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - found items in collection", "collection", collName, "count", len(items))
+		}
 		for i := range items {
 			items[i].Collection = collName
 			result[items[i].UniqueName] = &items[i]
 		}
 	}
 
+	logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - completed", "foundCount", len(result))
 	return result, nil
 }

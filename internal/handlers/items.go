@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/graytonio/warframe-wishlist/internal/models"
 	"github.com/graytonio/warframe-wishlist/internal/services"
+	"github.com/graytonio/warframe-wishlist/pkg/logger"
 	"github.com/graytonio/warframe-wishlist/pkg/response"
 )
 
@@ -19,6 +20,7 @@ func NewItemHandler(itemService services.ItemServiceInterface) *ItemHandler {
 }
 
 func (h *ItemHandler) Search(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	query := r.URL.Query()
 
 	limit, _ := strconv.Atoi(query.Get("limit"))
@@ -31,12 +33,16 @@ func (h *ItemHandler) Search(w http.ResponseWriter, r *http.Request) {
 		Offset:   offset,
 	}
 
-	items, err := h.itemService.Search(r.Context(), params)
+	logger.Debug(ctx, "handler: Search called", "query", params.Query, "category", params.Category, "limit", params.Limit, "offset", params.Offset)
+
+	items, err := h.itemService.Search(ctx, params)
 	if err != nil {
+		logger.Error(ctx, "handler: Search - failed to search items", "error", err)
 		response.Error(w, http.StatusInternalServerError, "failed to search items")
 		return
 	}
 
+	logger.Info(ctx, "handler: Search - success", "resultCount", len(items))
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"items": items,
 		"count": len(items),
@@ -44,22 +50,34 @@ func (h *ItemHandler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ItemHandler) GetByUniqueName(w http.ResponseWriter, r *http.Request) {
-	uniqueName := chi.URLParam(r, "uniqueName")
+	ctx := r.Context()
+
+	// Use wildcard param to capture full path including slashes (e.g., /Lotus/Types/Items/...)
+	uniqueName := chi.URLParam(r, "*")
 	if uniqueName == "" {
+		logger.Warn(ctx, "handler: GetByUniqueName - uniqueName is required")
 		response.Error(w, http.StatusBadRequest, "uniqueName is required")
 		return
 	}
 
-	item, err := h.itemService.GetByUniqueName(r.Context(), uniqueName)
+	// Add leading slash to the uniqueName
+	uniqueName = "/" + uniqueName
+
+	logger.Debug(ctx, "handler: GetByUniqueName called", "uniqueName", uniqueName)
+
+	item, err := h.itemService.GetByUniqueName(ctx, uniqueName)
 	if err != nil {
+		logger.Error(ctx, "handler: GetByUniqueName - failed to get item", "error", err, "uniqueName", uniqueName)
 		response.Error(w, http.StatusInternalServerError, "failed to get item")
 		return
 	}
 
 	if item == nil {
+		logger.Warn(ctx, "handler: GetByUniqueName - item not found", "uniqueName", uniqueName)
 		response.Error(w, http.StatusNotFound, "item not found")
 		return
 	}
 
+	logger.Info(ctx, "handler: GetByUniqueName - success", "uniqueName", uniqueName, "itemName", item.Name)
 	response.JSON(w, http.StatusOK, item)
 }

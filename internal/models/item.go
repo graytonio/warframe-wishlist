@@ -11,6 +11,7 @@ type Component struct {
 	ImageName    string `json:"imageName,omitempty" bson:"imageName,omitempty"`
 	Tradable     bool   `json:"tradable,omitempty" bson:"tradable,omitempty"`
 	Drops        []Drop `json:"drops,omitempty" bson:"drops,omitempty"`
+	HasOwnPage   bool   `json:"hasOwnPage,omitempty" bson:"-"`
 }
 
 type Drop struct {

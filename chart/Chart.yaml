@@ -1,0 +1,18 @@
+apiVersion: v2
+name: warframe-wishlist
+description: A Helm chart for deploying the Warframe Wishlist application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - warframe
+  - wishlist
+  - api
+maintainers:
+  - name: graytonio
+
+dependencies:
+  - name: mongodb
+    version: "16.4.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: mongodb.enabled

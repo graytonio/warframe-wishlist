@@ -1,0 +1,78 @@
+# Production values for warframe-wishlist
+# Uses external MongoDB (e.g., MongoDB Atlas)
+
+replicaCount: 2
+
+image:
+  repository: your-registry.io/warframe-wishlist
+  pullPolicy: Always
+  tag: "latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: warframe-wishlist.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: warframe-wishlist-tls
+      hosts:
+        - warframe-wishlist.example.com
+
+config:
+  serverPort: "8080"
+  logLevel: "info"
+  allowedOrigins: "https://warframe-wishlist.example.com"
+
+# Use external MongoDB (recommended for production)
+mongodb:
+  enabled: false
+  database: "warframe"
+
+externalMongodb:
+  uri: ""  # Set via existingSecret or --set
+
+supabase:
+  url: "https://your-project.supabase.co"
+
+# For production, use an existing secret or external secret management
+# Create the secret manually or use external-secrets operator:
+#
+# kubectl create secret generic warframe-wishlist-secrets \
+#   --from-literal=MONGO_URI='mongodb+srv://user:pass@cluster.mongodb.net/warframe' \
+#   --from-literal=SUPABASE_JWT_SECRET='your-jwt-secret'
+#
+existingSecret: "warframe-wishlist-secrets"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL

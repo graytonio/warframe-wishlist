@@ -1,0 +1,126 @@
+# Default values for warframe-wishlist
+
+replicaCount: 1
+
+image:
+  repository: warframe-wishlist
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: warframe-wishlist.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: warframe-wishlist-tls
+  #    hosts:
+  #      - warframe-wishlist.local
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  serverPort: "8080"
+  logLevel: "info"
+  allowedOrigins: "*"
+
+# MongoDB configuration
+mongodb:
+  # Set to true to deploy MongoDB in the cluster
+  # Set to false to use an external MongoDB instance
+  enabled: false
+
+  # Database name (used for both internal and external)
+  database: "warframe"
+
+  # Authentication settings for internal MongoDB
+  auth:
+    enabled: true
+    rootUser: root
+    rootPassword: ""
+    # Create a dedicated user for the application
+    usernames:
+      - warframe
+    passwords:
+      - ""
+    databases:
+      - warframe
+
+  # Persistence settings for internal MongoDB
+  persistence:
+    enabled: true
+    size: 8Gi
+    # storageClass: ""
+
+  # Resource limits for internal MongoDB
+  resources: {}
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 256Mi
+
+# External MongoDB configuration (used when mongodb.enabled=false)
+externalMongodb:
+  # Full MongoDB connection URI
+  uri: ""
+
+# Supabase configuration (set JWT secret in secrets)
+supabase:
+  url: ""
+
+# Secrets - these should be overridden or managed externally
+secrets:
+  # Supabase JWT secret for verifying tokens
+  supabaseJwtSecret: ""
+
+# Use existing secret instead of creating one
+existingSecret: ""

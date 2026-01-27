@@ -1,9 +1,12 @@
 package main
 
 import (
-	"log"
+	"context"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -14,26 +17,40 @@ import (
 	"github.com/graytonio/warframe-wishlist/internal/middleware"
 	"github.com/graytonio/warframe-wishlist/internal/repository"
 	"github.com/graytonio/warframe-wishlist/internal/services"
+	"github.com/graytonio/warframe-wishlist/pkg/logger"
 )
 
 func main() {
 	cfg := config.Load()
 
+	// Initialize logger with configured level (debug mode inferred from level)
+	logger.Init(cfg.LogLevel)
+
+	ctx := context.Background()
+	logger.Info(ctx, "starting warframe-wishlist API server",
+		"logLevel", cfg.LogLevel,
+	)
+
+	logger.Debug(ctx, "connecting to MongoDB", "uri", cfg.MongoURI, "database", cfg.MongoDatabase)
 	db, err := database.NewMongoDB(cfg.MongoURI, cfg.MongoDatabase)
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		logger.Error(ctx, "failed to connect to MongoDB", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
-	log.Println("Connected to MongoDB")
+	logger.Info(ctx, "connected to MongoDB")
 
+	logger.Debug(ctx, "initializing repositories")
 	itemRepo := repository.NewItemRepository(db)
 	wishlistRepo := repository.NewWishlistRepository(db)
 
+	logger.Debug(ctx, "initializing services")
 	itemService := services.NewItemService(itemRepo)
 	wishlistService := services.NewWishlistService(wishlistRepo, itemRepo)
 	materialResolver := services.NewMaterialResolver(itemRepo, wishlistRepo)
 
+	logger.Debug(ctx, "initializing handlers")
 	healthHandler := handlers.NewHealthHandler()
 	itemHandler := handlers.NewItemHandler(itemService)
 	wishlistHandler := handlers.NewWishlistHandler(wishlistService, materialResolver)
@@ -42,9 +59,10 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
-	r.Use(chimiddleware.RequestID)
+	// Middleware stack
+	r.Use(chimiddleware.RequestID)         // Generate request IDs
+	r.Use(middleware.LoggingMiddleware)    // Custom structured logging
+	r.Use(chimiddleware.Recoverer)         // Recover from panics
 
 	allowedOrigins := strings.Split(cfg.AllowedOrigins, ",")
 	r.Use(cors.Handler(cors.Options{
@@ -61,22 +79,43 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/items", func(r chi.Router) {
 			r.Get("/search", itemHandler.Search)
-			r.Get("/{uniqueName}", itemHandler.GetByUniqueName)
+			r.Get("/*", itemHandler.GetByUniqueName)
 		})
 
 		r.Route("/wishlist", func(r chi.Router) {
 			r.Use(authMiddleware.Authenticate)
 			r.Get("/", wishlistHandler.GetWishlist)
 			r.Post("/", wishlistHandler.AddItem)
-			r.Delete("/{uniqueName}", wishlistHandler.RemoveItem)
-			r.Patch("/{uniqueName}", wishlistHandler.UpdateQuantity)
 			r.Get("/materials", wishlistHandler.GetMaterials)
+			r.Delete("/*", wishlistHandler.RemoveItem)
+			r.Patch("/*", wishlistHandler.UpdateQuantity)
 		})
 	})
 
 	addr := ":" + cfg.ServerPort
-	log.Printf("Server starting on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	logger.Info(ctx, "server starting", "address", addr)
+
+	// Graceful shutdown
+	server := &http.Server{
+		Addr:    addr,
+		Handler: r,
 	}
+
+	// Handle shutdown signals
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigChan
+		logger.Info(ctx, "received shutdown signal", "signal", sig.String())
+		if err := server.Shutdown(context.Background()); err != nil {
+			logger.Error(ctx, "error during server shutdown", "error", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Error(ctx, "server failed to start", "error", err)
+		os.Exit(1)
+	}
+
+	logger.Info(ctx, "server stopped gracefully")
 }

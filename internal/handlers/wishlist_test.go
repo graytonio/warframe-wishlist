@@ -248,7 +248,7 @@ func TestWishlistHandler_RemoveItem(t *testing.T) {
 			handler := NewWishlistHandler(mockService, mockResolver)
 
 			r := chi.NewRouter()
-			r.Delete("/api/v1/wishlist/{uniqueName}", func(w http.ResponseWriter, r *http.Request) {
+			r.Delete("/api/v1/wishlist/*", func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.WithValue(r.Context(), middleware.UserIDKey, tt.userID)
 				handler.RemoveItem(w, r.WithContext(ctx))
 			})
@@ -320,7 +320,7 @@ func TestWishlistHandler_UpdateQuantity(t *testing.T) {
 			handler := NewWishlistHandler(mockService, mockResolver)
 
 			r := chi.NewRouter()
-			r.Patch("/api/v1/wishlist/{uniqueName}", func(w http.ResponseWriter, r *http.Request) {
+			r.Patch("/api/v1/wishlist/*", func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.WithValue(r.Context(), middleware.UserIDKey, tt.userID)
 				handler.UpdateQuantity(w, r.WithContext(ctx))
 			})
