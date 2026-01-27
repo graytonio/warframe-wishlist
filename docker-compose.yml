@@ -8,6 +8,8 @@ services:
       - mongodb_data:/data/db
     environment:
       MONGO_INITDB_DATABASE: warframe
+    networks:
+      - warframe-wishlist
 
   api:
     build: .
@@ -18,12 +20,34 @@ services:
       - SERVER_PORT=8080
       - MONGO_URI=mongodb://mongodb:27017
       - MONGO_DATABASE=warframe
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     depends_on:
       - mongodb
     restart: unless-stopped
+    networks:
+      - warframe-wishlist
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build: ./web
+    container_name: warframe-web
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-http://localhost:54321}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - warframe-wishlist
+
+networks:
+  warframe-wishlist:
+    driver: bridge
 
 volumes:
   mongodb_data:
