@@ -1,0 +1,13 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: warframe-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: warframe
+
+volumes:
+  mongodb_data:
