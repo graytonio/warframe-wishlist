@@ -75,7 +75,7 @@ config:
 mongodb:
   # Set to true to deploy MongoDB in the cluster
   # Set to false to use an external MongoDB instance
-  enabled: false
+  enabled: true
 
   # Database name (used for both internal and external)
   database: "warframe"
@@ -119,8 +119,8 @@ supabase:
 
 # Secrets - these should be overridden or managed externally
 secrets:
-  # Supabase JWT secret for verifying tokens
-  supabaseJwtSecret: ""
+  # Supabase JWT public key for verifying tokens (JWK format)
+  supabaseJwtPublicKey: ""
 
 # Use existing secret instead of creating one
 existingSecret: ""

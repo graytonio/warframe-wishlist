@@ -59,7 +59,7 @@ supabase:
 #
 # kubectl create secret generic warframe-wishlist-secrets \
 #   --from-literal=MONGO_URI='mongodb+srv://user:pass@cluster.mongodb.net/warframe' \
-#   --from-literal=SUPABASE_JWT_SECRET='your-jwt-secret'
+#   --from-literal=SUPABASE_JWT_PUBLIC_KEY='{"kty":"EC","crv":"P-256",...}'
 #
 existingSecret: "warframe-wishlist-secrets"
 
