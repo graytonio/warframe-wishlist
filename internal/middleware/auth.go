@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"net/http"
 	"strings"
 
@@ -15,11 +16,11 @@ type contextKey string
 const UserIDKey contextKey = "userID"
 
 type AuthMiddleware struct {
-	jwtSecret string
+	jwtPublicKey *ecdsa.PublicKey
 }
 
-func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
-	return &AuthMiddleware{jwtSecret: jwtSecret}
+func NewAuthMiddleware(jwtPublicKey *ecdsa.PublicKey) *AuthMiddleware {
+	return &AuthMiddleware{jwtPublicKey: jwtPublicKey}
 }
 
 func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
@@ -45,10 +46,10 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 		logger.Debug(ctx, "parsing JWT token")
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
-			return []byte(m.jwtSecret), nil
+			return m.jwtPublicKey, nil
 		})
 
 		if err != nil || !token.Valid {

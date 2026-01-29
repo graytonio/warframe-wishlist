@@ -2,6 +2,9 @@ package middleware
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,23 +13,33 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func createTestToken(secret string, claims jwt.MapClaims) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(secret))
+// generateTestKeyPair creates an ECDSA key pair for testing
+func generateTestKeyPair(t *testing.T) (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ECDSA key pair: %v", err)
+	}
+	return privateKey, &privateKey.PublicKey
+}
+
+func createTestToken(privateKey *ecdsa.PrivateKey, claims jwt.MapClaims) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tokenString, _ := token.SignedString(privateKey)
 	return tokenString
 }
 
 func TestAuthMiddleware_Authenticate_ValidToken(t *testing.T) {
-	secret := "test-secret"
+	privateKey, publicKey := generateTestKeyPair(t)
 	userID := "user-123"
 
 	claims := jwt.MapClaims{
 		"sub": userID,
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := createTestToken(secret, claims)
+	token := createTestToken(privateKey, claims)
 
-	middleware := NewAuthMiddleware(secret)
+	middleware := NewAuthMiddleware(publicKey)
 
 	var capturedUserID string
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +63,8 @@ func TestAuthMiddleware_Authenticate_ValidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_MissingHeader(t *testing.T) {
-	middleware := NewAuthMiddleware("test-secret")
+	_, publicKey := generateTestKeyPair(t)
+	middleware := NewAuthMiddleware(publicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -77,7 +91,8 @@ func TestAuthMiddleware_Authenticate_InvalidHeaderFormat(t *testing.T) {
 		{"only bearer", "Bearer"},
 	}
 
-	middleware := NewAuthMiddleware("test-secret")
+	_, publicKey := generateTestKeyPair(t)
+	middleware := NewAuthMiddleware(publicKey)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,7 +114,8 @@ func TestAuthMiddleware_Authenticate_InvalidHeaderFormat(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_InvalidToken(t *testing.T) {
-	middleware := NewAuthMiddleware("test-secret")
+	_, publicKey := generateTestKeyPair(t)
+	middleware := NewAuthMiddleware(publicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -116,14 +132,18 @@ func TestAuthMiddleware_Authenticate_InvalidToken(t *testing.T) {
 	}
 }
 
-func TestAuthMiddleware_Authenticate_WrongSecret(t *testing.T) {
+func TestAuthMiddleware_Authenticate_WrongKey(t *testing.T) {
+	// Sign with one key pair
+	signingPrivateKey, _ := generateTestKeyPair(t)
 	claims := jwt.MapClaims{
 		"sub": "user-123",
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := createTestToken("wrong-secret", claims)
+	token := createTestToken(signingPrivateKey, claims)
 
-	middleware := NewAuthMiddleware("correct-secret")
+	// Validate with a different key pair
+	_, validationPublicKey := generateTestKeyPair(t)
+	middleware := NewAuthMiddleware(validationPublicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -141,14 +161,14 @@ func TestAuthMiddleware_Authenticate_WrongSecret(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_ExpiredToken(t *testing.T) {
-	secret := "test-secret"
+	privateKey, publicKey := generateTestKeyPair(t)
 	claims := jwt.MapClaims{
 		"sub": "user-123",
 		"exp": time.Now().Add(-time.Hour).Unix(),
 	}
-	token := createTestToken(secret, claims)
+	token := createTestToken(privateKey, claims)
 
-	middleware := NewAuthMiddleware(secret)
+	middleware := NewAuthMiddleware(publicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -166,13 +186,13 @@ func TestAuthMiddleware_Authenticate_ExpiredToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_MissingSubClaim(t *testing.T) {
-	secret := "test-secret"
+	privateKey, publicKey := generateTestKeyPair(t)
 	claims := jwt.MapClaims{
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := createTestToken(secret, claims)
+	token := createTestToken(privateKey, claims)
 
-	middleware := NewAuthMiddleware(secret)
+	middleware := NewAuthMiddleware(publicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -190,14 +210,14 @@ func TestAuthMiddleware_Authenticate_MissingSubClaim(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_EmptySubClaim(t *testing.T) {
-	secret := "test-secret"
+	privateKey, publicKey := generateTestKeyPair(t)
 	claims := jwt.MapClaims{
 		"sub": "",
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := createTestToken(secret, claims)
+	token := createTestToken(privateKey, claims)
 
-	middleware := NewAuthMiddleware(secret)
+	middleware := NewAuthMiddleware(publicKey)
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("next handler should not be called")
@@ -215,14 +235,14 @@ func TestAuthMiddleware_Authenticate_EmptySubClaim(t *testing.T) {
 }
 
 func TestAuthMiddleware_Authenticate_CaseInsensitiveBearer(t *testing.T) {
-	secret := "test-secret"
+	privateKey, publicKey := generateTestKeyPair(t)
 	claims := jwt.MapClaims{
 		"sub": "user-123",
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
-	token := createTestToken(secret, claims)
+	token := createTestToken(privateKey, claims)
 
-	middleware := NewAuthMiddleware(secret)
+	middleware := NewAuthMiddleware(publicKey)
 
 	bearerVariants := []string{"bearer", "Bearer", "BEARER", "BeArEr"}
 

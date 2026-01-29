@@ -55,14 +55,14 @@ func main() {
 	itemHandler := handlers.NewItemHandler(itemService)
 	wishlistHandler := handlers.NewWishlistHandler(wishlistService, materialResolver)
 
-	authMiddleware := middleware.NewAuthMiddleware(cfg.SupabaseJWTSecret)
+	authMiddleware := middleware.NewAuthMiddleware(cfg.SupabaseJWTPublicKey)
 
 	r := chi.NewRouter()
 
 	// Middleware stack
-	r.Use(chimiddleware.RequestID)         // Generate request IDs
-	r.Use(middleware.LoggingMiddleware)    // Custom structured logging
-	r.Use(chimiddleware.Recoverer)         // Recover from panics
+	r.Use(chimiddleware.RequestID)      // Generate request IDs
+	r.Use(middleware.LoggingMiddleware) // Custom structured logging
+	r.Use(chimiddleware.Recoverer)      // Recover from panics
 
 	allowedOrigins := strings.Split(cfg.AllowedOrigins, ",")
 	r.Use(cors.Handler(cors.Options{
