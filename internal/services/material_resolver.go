@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 
 	"github.com/graytonio/warframe-wishlist/internal/models"
 	"github.com/graytonio/warframe-wishlist/internal/repository"
@@ -130,6 +131,25 @@ func ceilDiv(a, b int) int {
 		return a
 	}
 	return (a + b - 1) / b
+}
+
+// isLikelyBlueprint determines if an item is a blueprint type that should be treated as reusable.
+// Returns true if the item appears to be a blueprint (has "Blueprint" in the name or unique name).
+// Regular consumable materials should return false.
+func isLikelyBlueprint(item *models.Item) bool {
+	if item == nil {
+		return false
+	}
+	// Check if "Blueprint" appears in the name or unique name
+	// This helps distinguish blueprints from regular consumable materials
+	return containsIgnoreCase(item.Name, "Blueprint") || containsIgnoreCase(item.UniqueName, "Blueprint")
+}
+
+// containsIgnoreCase checks if a string contains a substring (case-insensitive)
+func containsIgnoreCase(s, substr string) bool {
+	s = strings.ToLower(s)
+	substr = strings.ToLower(substr)
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || strings.Contains(s, substr)))
 }
 
 func (r *MaterialResolver) resolveItemInternal(ctx context.Context, item *models.Item, parentName string, multiplier int, materialCounts map[string]int, materialInfo map[string]*models.Item, visited map[string]bool, nonConsumableCounted map[string]bool, ownedBlueprintsSet map[string]bool) int {
