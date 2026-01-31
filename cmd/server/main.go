@@ -44,16 +44,19 @@ func main() {
 	logger.Debug(ctx, "initializing repositories")
 	itemRepo := repository.NewItemRepository(db)
 	wishlistRepo := repository.NewWishlistRepository(db)
+	ownedBPRepo := repository.NewOwnedBlueprintsRepository(db)
 
 	logger.Debug(ctx, "initializing services")
 	itemService := services.NewItemService(itemRepo)
 	wishlistService := services.NewWishlistService(wishlistRepo, itemRepo)
-	materialResolver := services.NewMaterialResolver(itemRepo, wishlistRepo)
+	ownedBPService := services.NewOwnedBlueprintsService(ownedBPRepo, itemRepo)
+	materialResolver := services.NewMaterialResolver(itemRepo, wishlistRepo, ownedBPRepo)
 
 	logger.Debug(ctx, "initializing handlers")
 	healthHandler := handlers.NewHealthHandler()
 	itemHandler := handlers.NewItemHandler(itemService)
 	wishlistHandler := handlers.NewWishlistHandler(wishlistService, materialResolver)
+	ownedBPHandler := handlers.NewOwnedBlueprintsHandler(ownedBPService)
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg.SupabaseJWTPublicKey)
 
@@ -79,6 +82,7 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/items", func(r chi.Router) {
 			r.Get("/search", itemHandler.Search)
+			r.Get("/blueprints/reusable", itemHandler.SearchReusableBlueprints)
 			r.Get("/*", itemHandler.GetByUniqueName)
 		})
 
@@ -89,6 +93,15 @@ func main() {
 			r.Get("/materials", wishlistHandler.GetMaterials)
 			r.Delete("/*", wishlistHandler.RemoveItem)
 			r.Patch("/*", wishlistHandler.UpdateQuantity)
+		})
+
+		r.Route("/profile/blueprints", func(r chi.Router) {
+			r.Use(authMiddleware.Authenticate)
+			r.Get("/", ownedBPHandler.GetOwnedBlueprints)
+			r.Post("/", ownedBPHandler.AddBlueprint)
+			r.Post("/bulk", ownedBPHandler.BulkAddBlueprints)
+			r.Delete("/", ownedBPHandler.ClearAllBlueprints)
+			r.Delete("/*", ownedBPHandler.RemoveBlueprint)
 		})
 	})
 

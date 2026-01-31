@@ -3,15 +3,16 @@ package models
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type Component struct {
-	UniqueName   string `json:"uniqueName" bson:"uniqueName"`
-	Name         string `json:"name" bson:"name"`
-	ItemCount    int    `json:"itemCount" bson:"itemCount"`
-	IsPrime      bool   `json:"isPrime,omitempty" bson:"isPrime,omitempty"`
-	Description  string `json:"description,omitempty" bson:"description,omitempty"`
-	ImageName    string `json:"imageName,omitempty" bson:"imageName,omitempty"`
-	Tradable     bool   `json:"tradable,omitempty" bson:"tradable,omitempty"`
-	Drops        []Drop `json:"drops,omitempty" bson:"drops,omitempty"`
-	HasOwnPage   bool   `json:"hasOwnPage,omitempty" bson:"-"`
+	UniqueName   string      `json:"uniqueName" bson:"uniqueName"`
+	Name         string      `json:"name" bson:"name"`
+	ItemCount    int         `json:"itemCount" bson:"itemCount"`
+	IsPrime      bool        `json:"isPrime,omitempty" bson:"isPrime,omitempty"`
+	Description  string      `json:"description,omitempty" bson:"description,omitempty"`
+	ImageName    string      `json:"imageName,omitempty" bson:"imageName,omitempty"`
+	Tradable     bool        `json:"tradable,omitempty" bson:"tradable,omitempty"`
+	Drops        []Drop      `json:"drops,omitempty" bson:"drops,omitempty"`
+	Components   []Component `json:"components,omitempty" bson:"components,omitempty"`
+	HasOwnPage   bool        `json:"hasOwnPage,omitempty" bson:"-"`
 }
 
 type Drop struct {

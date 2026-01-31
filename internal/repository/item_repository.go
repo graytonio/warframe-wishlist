@@ -170,3 +170,69 @@ func (r *ItemRepository) FindByUniqueNames(ctx context.Context, uniqueNames []st
 	logger.Debug(ctx, "repo: ItemRepository.FindByUniqueNames - completed", "foundCount", len(result))
 	return result, nil
 }
+
+func (r *ItemRepository) SearchReusableBlueprints(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error) {
+	logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints called", "query", query, "limit", limit)
+
+	var results []models.ItemSearchResult
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	filter := bson.M{
+		"consumeOnBuild": false,
+	}
+	if query != "" {
+		filter["name"] = bson.M{"$regex": primitive.Regex{Pattern: query, Options: "i"}}
+	}
+
+	findOptions := options.Find().
+		SetProjection(bson.M{
+			"uniqueName":  1,
+			"name":        1,
+			"description": 1,
+			"category":    1,
+			"imageName":   1,
+		}).
+		SetLimit(int64(limit))
+
+	logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints - searching collections", "collectionCount", len(ItemCollections))
+	for _, collName := range ItemCollections {
+		collection := r.db.Collection(collName)
+
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		cursor, err := collection.Find(ctx, filter, findOptions)
+		cancel()
+		if err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints - error querying collection", "collection", collName, "error", err)
+			continue
+		}
+
+		var items []models.ItemSearchResult
+		if err := cursor.All(ctx, &items); err != nil {
+			logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints - error decoding results", "collection", collName, "error", err)
+			cursor.Close(ctx)
+			continue
+		}
+		cursor.Close(ctx)
+
+		for i := range items {
+			items[i].Collection = collName
+		}
+
+		logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints - found items in collection", "collection", collName, "count", len(items))
+		results = append(results, items...)
+
+		if len(results) >= limit {
+			results = results[:limit]
+			break
+		}
+	}
+
+	logger.Debug(ctx, "repo: ItemRepository.SearchReusableBlueprints - completed", "totalResults", len(results))
+	return results, nil
+}

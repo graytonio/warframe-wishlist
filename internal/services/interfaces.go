@@ -9,6 +9,7 @@ import (
 type ItemServiceInterface interface {
 	Search(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error)
 	GetByUniqueName(ctx context.Context, uniqueName string) (*models.Item, error)
+	SearchReusableBlueprints(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error)
 }
 
 type WishlistServiceInterface interface {
@@ -22,6 +23,15 @@ type MaterialResolverInterface interface {
 	GetMaterials(ctx context.Context, userID string) (*models.MaterialsResponse, error)
 }
 
+type OwnedBlueprintsServiceInterface interface {
+	GetOwnedBlueprints(ctx context.Context, userID string) (*models.OwnedBlueprints, error)
+	AddBlueprint(ctx context.Context, userID string, req models.AddBlueprintRequest) error
+	RemoveBlueprint(ctx context.Context, userID, uniqueName string) error
+	BulkAddBlueprints(ctx context.Context, userID string, req models.BulkAddBlueprintsRequest) error
+	ClearAllBlueprints(ctx context.Context, userID string) error
+}
+
 var _ ItemServiceInterface = (*ItemService)(nil)
 var _ WishlistServiceInterface = (*WishlistService)(nil)
 var _ MaterialResolverInterface = (*MaterialResolver)(nil)
+var _ OwnedBlueprintsServiceInterface = (*OwnedBlueprintsService)(nil)

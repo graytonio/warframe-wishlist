@@ -81,3 +81,30 @@ func (h *ItemHandler) GetByUniqueName(w http.ResponseWriter, r *http.Request) {
 	logger.Info(ctx, "handler: GetByUniqueName - success", "uniqueName", uniqueName, "itemName", item.Name)
 	response.JSON(w, http.StatusOK, item)
 }
+
+func (h *ItemHandler) SearchReusableBlueprints(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	query := r.URL.Query()
+
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+
+	q := query.Get("q")
+
+	logger.Debug(ctx, "handler: SearchReusableBlueprints called", "query", q, "limit", limit)
+
+	items, err := h.itemService.SearchReusableBlueprints(ctx, q, limit)
+	if err != nil {
+		logger.Error(ctx, "handler: SearchReusableBlueprints - failed to search reusable blueprints", "error", err)
+		response.Error(w, http.StatusInternalServerError, "failed to search reusable blueprints")
+		return
+	}
+
+	logger.Info(ctx, "handler: SearchReusableBlueprints - success", "resultCount", len(items))
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"items": items,
+		"count": len(items),
+	})
+}

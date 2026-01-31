@@ -119,6 +119,9 @@ func (h *WishlistHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add leading slash to the uniqueName
+	uniqueName = "/" + uniqueName
+
 	logger.Debug(ctx, "handler: RemoveItem - removing item from wishlist", "uniqueName", uniqueName)
 	err := h.wishlistService.RemoveItem(ctx, userID, uniqueName)
 	if err != nil {

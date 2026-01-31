@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, List, LogOut, User } from 'lucide-react'
+import { Search, List, LogOut, User, Settings } from 'lucide-react'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -53,6 +53,12 @@ export function Header() {
                     <p className="text-sm font-medium">{user.email}</p>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Profile Settings
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => signOut()}>
                     <LogOut className="h-4 w-4 mr-2" />
                     Sign out

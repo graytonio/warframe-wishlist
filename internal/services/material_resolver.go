@@ -11,12 +11,14 @@ import (
 type MaterialResolver struct {
 	itemRepo     repository.ItemRepositoryInterface
 	wishlistRepo repository.WishlistRepositoryInterface
+	ownedBPRepo  repository.OwnedBlueprintsRepositoryInterface
 }
 
-func NewMaterialResolver(itemRepo repository.ItemRepositoryInterface, wishlistRepo repository.WishlistRepositoryInterface) *MaterialResolver {
+func NewMaterialResolver(itemRepo repository.ItemRepositoryInterface, wishlistRepo repository.WishlistRepositoryInterface, ownedBPRepo repository.OwnedBlueprintsRepositoryInterface) *MaterialResolver {
 	return &MaterialResolver{
 		itemRepo:     itemRepo,
 		wishlistRepo: wishlistRepo,
+		ownedBPRepo:  ownedBPRepo,
 	}
 }
 
@@ -35,6 +37,22 @@ func (r *MaterialResolver) GetMaterials(ctx context.Context, userID string) (*mo
 			Materials:    []models.MaterialRequirement{},
 			TotalCredits: 0,
 		}, nil
+	}
+
+	// Fetch owned blueprints to exclude from materials
+	ownedBlueprintsSet := make(map[string]bool)
+	if r.ownedBPRepo != nil {
+		ownedBP, err := r.ownedBPRepo.GetByUserID(ctx, userID)
+		if err != nil {
+			logger.Error(ctx, "service: MaterialResolver.GetMaterials - error fetching owned blueprints", "error", err)
+			return nil, err
+		}
+		if ownedBP != nil {
+			for _, bp := range ownedBP.Blueprints {
+				ownedBlueprintsSet[bp.UniqueName] = true
+			}
+			logger.Debug(ctx, "service: MaterialResolver.GetMaterials - fetched owned blueprints", "count", len(ownedBP.Blueprints))
+		}
 	}
 
 	logger.Debug(ctx, "service: MaterialResolver.GetMaterials - processing wishlist items", "itemCount", len(wishlist.Items))
@@ -57,6 +75,7 @@ func (r *MaterialResolver) GetMaterials(ctx context.Context, userID string) (*mo
 	materialCounts := make(map[string]int)
 	materialInfo := make(map[string]*models.Item)
 	visited := make(map[string]bool)
+	nonConsumableCounted := make(map[string]bool) // Track non-consumable items globally
 	totalCredits := 0
 
 	for _, wishlistItem := range wishlist.Items {
@@ -71,7 +90,7 @@ func (r *MaterialResolver) GetMaterials(ctx context.Context, userID string) (*mo
 			for k := range visited {
 				delete(visited, k)
 			}
-			credits := r.resolveItem(ctx, item, 1, materialCounts, materialInfo, visited)
+			credits := r.resolveItemInternal(ctx, item, "", 1, materialCounts, materialInfo, visited, nonConsumableCounted, ownedBlueprintsSet)
 			totalCredits += credits
 		}
 	}
@@ -100,6 +119,20 @@ func (r *MaterialResolver) GetMaterials(ctx context.Context, userID string) (*mo
 }
 
 func (r *MaterialResolver) resolveItem(ctx context.Context, item *models.Item, multiplier int, materialCounts map[string]int, materialInfo map[string]*models.Item, visited map[string]bool) int {
+	nonConsumableCounted := make(map[string]bool)
+	ownedBlueprintsSet := make(map[string]bool)
+	return r.resolveItemInternal(ctx, item, "", multiplier, materialCounts, materialInfo, visited, nonConsumableCounted, ownedBlueprintsSet)
+}
+
+// ceilDiv performs ceiling division: ceil(a / b)
+func ceilDiv(a, b int) int {
+	if b <= 0 {
+		return a
+	}
+	return (a + b - 1) / b
+}
+
+func (r *MaterialResolver) resolveItemInternal(ctx context.Context, item *models.Item, parentName string, multiplier int, materialCounts map[string]int, materialInfo map[string]*models.Item, visited map[string]bool, nonConsumableCounted map[string]bool, ownedBlueprintsSet map[string]bool) int {
 	if item == nil {
 		logger.Debug(ctx, "service: MaterialResolver.resolveItem - nil item, returning 0")
 		return 0
@@ -115,9 +148,45 @@ func (r *MaterialResolver) resolveItem(ctx context.Context, item *models.Item, m
 	logger.Debug(ctx, "service: MaterialResolver.resolveItem - processing", "uniqueName", item.UniqueName, "multiplier", multiplier, "buildPrice", item.BuildPrice)
 
 	if len(item.Components) == 0 {
-		logger.Debug(ctx, "service: MaterialResolver.resolveItem - base material (no components)", "uniqueName", item.UniqueName, "count", multiplier)
-		materialCounts[item.UniqueName] += multiplier
-		materialInfo[item.UniqueName] = item
+		// Determine if this is actually a reusable blueprint
+		// ConsumeOnBuild defaults to false in Go, so we need additional checks
+		// A reusable blueprint must have ConsumeOnBuild=false AND be a blueprint-type item
+		isReusableBlueprint := !item.ConsumeOnBuild && isLikelyBlueprint(item)
+
+		// Check if this is a reusable blueprint that user already owns
+		if isReusableBlueprint && ownedBlueprintsSet[item.UniqueName] {
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - user already owns this reusable blueprint, skipping", "uniqueName", item.UniqueName)
+			return totalCredits
+		}
+
+		// Check if this is a reusable blueprint already counted
+		if isReusableBlueprint && nonConsumableCounted[item.UniqueName] {
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - non-consumable already counted, skipping", "uniqueName", item.UniqueName)
+			return totalCredits
+		}
+
+		countToAdd := multiplier
+		if isReusableBlueprint {
+			// Non-consumable items only need 1 regardless of quantity
+			countToAdd = 1
+			nonConsumableCounted[item.UniqueName] = true
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - non-consumable base material", "uniqueName", item.UniqueName)
+		} else {
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - base material (no components)", "uniqueName", item.UniqueName, "count", multiplier)
+		}
+
+		materialCounts[item.UniqueName] += countToAdd
+		// For items named "Blueprint", add parent context
+		itemToStore := item
+		if item.Name == "Blueprint" && parentName != "" {
+			itemToStore = &models.Item{
+				UniqueName:  item.UniqueName,
+				Name:        "Blueprint (" + parentName + ")",
+				ImageName:   item.ImageName,
+				Description: item.Description,
+			}
+		}
+		materialInfo[item.UniqueName] = itemToStore
 		return totalCredits
 	}
 
@@ -125,13 +194,43 @@ func (r *MaterialResolver) resolveItem(ctx context.Context, item *models.Item, m
 	for _, component := range item.Components {
 		componentCount := component.ItemCount * multiplier
 
-		componentItem, err := r.itemRepo.FindByUniqueName(ctx, component.UniqueName)
-		if err != nil || componentItem == nil {
-			logger.Debug(ctx, "service: MaterialResolver.resolveItem - component not found or error, treating as raw material", "uniqueName", component.UniqueName, "count", componentCount)
-			materialCounts[component.UniqueName] += componentCount
-			materialInfo[component.UniqueName] = &models.Item{
+		// Check if component has nested components in the embedded data
+		if len(component.Components) > 0 {
+			// Try to fetch from database to get buildQuantity
+			componentItem, _ := r.itemRepo.FindByUniqueName(ctx, component.UniqueName)
+			buildQuantity := 1
+			if componentItem != nil && componentItem.BuildQuantity > 0 {
+				buildQuantity = componentItem.BuildQuantity
+			}
+			craftsNeeded := ceilDiv(componentCount, buildQuantity)
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - component has nested components, recursing", "uniqueName", component.UniqueName, "needed", componentCount, "buildQuantity", buildQuantity, "crafts", craftsNeeded)
+			// Create a temporary Item from the component to recurse
+			componentAsItem := &models.Item{
 				UniqueName:  component.UniqueName,
 				Name:        component.Name,
+				ImageName:   component.ImageName,
+				Description: component.Description,
+				Components:  component.Components,
+			}
+			credits := r.resolveItemInternal(ctx, componentAsItem, item.Name, craftsNeeded, materialCounts, materialInfo, visited, nonConsumableCounted, ownedBlueprintsSet)
+			totalCredits += credits
+			continue
+		}
+
+		// Try to fetch from database to check for additional components
+		componentItem, err := r.itemRepo.FindByUniqueName(ctx, component.UniqueName)
+		if err != nil || componentItem == nil {
+			// Component not found in database and has no nested components - it's a base material
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - component is base material (not in db)", "uniqueName", component.UniqueName, "count", componentCount)
+			materialCounts[component.UniqueName] += componentCount
+			// For components named "Blueprint", add parent context
+			componentName := component.Name
+			if component.Name == "Blueprint" && item.Name != "" {
+				componentName = "Blueprint (" + item.Name + ")"
+			}
+			materialInfo[component.UniqueName] = &models.Item{
+				UniqueName:  component.UniqueName,
+				Name:        componentName,
 				ImageName:   component.ImageName,
 				Description: component.Description,
 			}
@@ -139,12 +238,48 @@ func (r *MaterialResolver) resolveItem(ctx context.Context, item *models.Item, m
 		}
 
 		if len(componentItem.Components) == 0 {
-			logger.Debug(ctx, "service: MaterialResolver.resolveItem - component is base material", "uniqueName", component.UniqueName, "count", componentCount)
-			materialCounts[component.UniqueName] += componentCount
+			// Check if this is a non-consumable item (reusable blueprint) that user already owns
+			if !componentItem.ConsumeOnBuild && ownedBlueprintsSet[component.UniqueName] {
+				logger.Debug(ctx, "service: MaterialResolver.resolveItem - user already owns this reusable blueprint, skipping", "uniqueName", component.UniqueName)
+				continue
+			}
+
+			// Check if this is a non-consumable item (reusable blueprint)
+			if !componentItem.ConsumeOnBuild && nonConsumableCounted[component.UniqueName] {
+				logger.Debug(ctx, "service: MaterialResolver.resolveItem - non-consumable already counted, skipping", "uniqueName", component.UniqueName)
+				continue
+			}
+
+			countToAdd := componentCount
+			if !componentItem.ConsumeOnBuild {
+				// Non-consumable items only need 1 regardless of quantity
+				countToAdd = 1
+				nonConsumableCounted[component.UniqueName] = true
+				logger.Debug(ctx, "service: MaterialResolver.resolveItem - non-consumable component", "uniqueName", component.UniqueName)
+			} else {
+				logger.Debug(ctx, "service: MaterialResolver.resolveItem - component is base material", "uniqueName", component.UniqueName, "count", componentCount)
+			}
+
+			materialCounts[component.UniqueName] += countToAdd
+			// For components named "Blueprint", add parent context
+			if componentItem.Name == "Blueprint" && item.Name != "" {
+				componentItem = &models.Item{
+					UniqueName:  componentItem.UniqueName,
+					Name:        "Blueprint (" + item.Name + ")",
+					ImageName:   componentItem.ImageName,
+					Description: componentItem.Description,
+				}
+			}
 			materialInfo[component.UniqueName] = componentItem
 		} else {
-			logger.Debug(ctx, "service: MaterialResolver.resolveItem - recursing into component", "uniqueName", component.UniqueName)
-			credits := r.resolveItem(ctx, componentItem, componentCount, materialCounts, materialInfo, visited)
+			// Calculate crafts needed based on buildQuantity
+			buildQuantity := 1
+			if componentItem.BuildQuantity > 0 {
+				buildQuantity = componentItem.BuildQuantity
+			}
+			craftsNeeded := ceilDiv(componentCount, buildQuantity)
+			logger.Debug(ctx, "service: MaterialResolver.resolveItem - recursing into component", "uniqueName", component.UniqueName, "needed", componentCount, "buildQuantity", buildQuantity, "crafts", craftsNeeded)
+			credits := r.resolveItemInternal(ctx, componentItem, item.Name, craftsNeeded, materialCounts, materialInfo, visited, nonConsumableCounted, ownedBlueprintsSet)
 			totalCredits += credits
 		}
 	}

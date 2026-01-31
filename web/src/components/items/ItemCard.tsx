@@ -1,6 +1,7 @@
 import type { ItemSearchResult } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ItemImage, getItemImageUrl } from '@/components/ui/item-image'
 import { Plus } from 'lucide-react'
 
 interface ItemCardProps {
@@ -10,22 +11,15 @@ interface ItemCardProps {
 }
 
 export function ItemCard({ item, onAddToWishlist, onViewDetails }: ItemCardProps) {
-  const imageUrl = item.imageName
-    ? `https://cdn.warframestat.us/img/${item.imageName}`
-    : '/placeholder.png'
-
   return (
     <Card data-testid="item-card" className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
       <div onClick={() => onViewDetails?.(item.uniqueName)}>
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center gap-3">
-            <img
-              src={imageUrl}
+            <ItemImage
+              src={getItemImageUrl(item.imageName)}
               alt={item.name}
-              className="w-12 h-12 object-contain"
-              onError={(e) => {
-                e.currentTarget.src = '/placeholder.png'
-              }}
+              className="w-12 h-12"
             />
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base truncate">{item.name}</CardTitle>

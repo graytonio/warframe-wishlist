@@ -3,15 +3,17 @@ import type { WishlistItem as WishlistItemType, Item } from '@/lib/api'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ItemImage, getItemImageUrl } from '@/components/ui/item-image'
 import { Trash2, Minus, Plus } from 'lucide-react'
 
 interface WishlistItemProps {
   item: WishlistItemType
   onUpdateQuantity: (uniqueName: string, quantity: number) => void
   onRemove: (uniqueName: string) => void
+  onViewDetails?: (uniqueName: string) => void
 }
 
-export function WishlistItemRow({ item, onUpdateQuantity, onRemove }: WishlistItemProps) {
+export function WishlistItemRow({ item, onUpdateQuantity, onRemove, onViewDetails }: WishlistItemProps) {
   const [itemDetails, setItemDetails] = useState<Item | null>(null)
   const [localQuantity, setLocalQuantity] = useState(item.quantity)
 
@@ -31,33 +33,42 @@ export function WishlistItemRow({ item, onUpdateQuantity, onRemove }: WishlistIt
     onUpdateQuantity(item.uniqueName, newQuantity)
   }
 
-  const imageUrl = itemDetails?.imageName
-    ? `https://cdn.warframestat.us/img/${itemDetails.imageName}`
-    : '/placeholder.png'
+  // Get the best drop location (highest chance)
+  const bestDrop = itemDetails?.drops?.length
+    ? [...itemDetails.drops].sort((a, b) => (b.chance ?? 0) - (a.chance ?? 0))[0]
+    : null
 
   return (
     <div className="flex items-center gap-4 p-4 border rounded-lg">
-      <img
-        src={imageUrl}
-        alt={itemDetails?.name || item.uniqueName}
-        className="w-12 h-12 object-contain"
-        onError={(e) => {
-          e.currentTarget.src = '/placeholder.png'
-        }}
-      />
-      <div className="flex-1 min-w-0">
-        <h4 className="font-medium truncate">
-          {itemDetails?.name || item.uniqueName}
-        </h4>
-        {itemDetails?.category && (
-          <p className="text-sm text-muted-foreground">{itemDetails.category}</p>
-        )}
-        {itemDetails?.buildPrice && (
-          <p className="text-xs text-muted-foreground">
-            {(itemDetails.buildPrice * localQuantity).toLocaleString()} Credits
-          </p>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => onViewDetails?.(item.uniqueName)}
+        className="flex items-center gap-4 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity cursor-pointer"
+      >
+        <ItemImage
+          src={getItemImageUrl(itemDetails?.imageName)}
+          alt={itemDetails?.name || item.uniqueName}
+          className="w-12 h-12"
+        />
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium truncate">
+            {itemDetails?.name || item.uniqueName}
+          </h4>
+          {bestDrop ? (
+            <p className="text-sm text-muted-foreground truncate">
+              {bestDrop.location}
+              {bestDrop.chance && ` (${(bestDrop.chance * 100).toFixed(1)}%)`}
+            </p>
+          ) : itemDetails?.category ? (
+            <p className="text-sm text-muted-foreground">{itemDetails.category}</p>
+          ) : null}
+          {itemDetails?.buildPrice && (
+            <p className="text-xs text-muted-foreground">
+              {(itemDetails.buildPrice * localQuantity).toLocaleString()} Credits
+            </p>
+          )}
+        </div>
+      </button>
       <div className="flex items-center gap-2">
         <Button
           variant="outline"

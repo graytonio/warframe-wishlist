@@ -25,7 +25,7 @@ test.describe('Search Page', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: [] }),
+        body: JSON.stringify({ items: [] }),
       })
     })
 
@@ -44,7 +44,7 @@ test.describe('Search Page', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          data: [
+          items: [
             {
               uniqueName: '/Lotus/Powersuits/Excalibur/Excalibur',
               name: 'Excalibur',
@@ -67,9 +67,13 @@ test.describe('Search Page', () => {
     const searchInput = page.getByPlaceholder(/search for warframes/i)
     await searchInput.fill('excalibur')
 
-    // Wait for results to appear
-    await expect(page.getByText('Excalibur')).toBeVisible()
-    await expect(page.getByText('Excalibur Prime')).toBeVisible()
+    // Wait for item cards to appear (they have data-testid="item-card")
+    const itemCards = page.getByTestId('item-card')
+    await expect(itemCards).toHaveCount(2)
+
+    // Verify card contents
+    await expect(itemCards.nth(0).getByText('Excalibur')).toBeVisible()
+    await expect(itemCards.nth(1).getByText('Excalibur Prime')).toBeVisible()
   })
 
   test('should show no results message when search returns empty', async ({ page }) => {
@@ -78,7 +82,7 @@ test.describe('Search Page', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: [] }),
+        body: JSON.stringify({ items: [] }),
       })
     })
 
@@ -97,7 +101,7 @@ test.describe('Search Page', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: [] }),
+        body: JSON.stringify({ items: [] }),
       })
     })
 
@@ -120,7 +124,7 @@ test.describe('Search Page', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          data: [
+          items: [
             {
               uniqueName: '/Lotus/Powersuits/Excalibur/Excalibur',
               name: 'Excalibur',

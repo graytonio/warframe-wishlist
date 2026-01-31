@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { api, type Wishlist as WishlistType } from '@/lib/api'
 import { WishlistItemRow } from '@/components/wishlist/WishlistItem'
 import { MaterialsSummary } from '@/components/wishlist/MaterialsSummary'
+import { ItemDetailDialog } from '@/components/items/ItemDetailDialog'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
@@ -11,6 +12,8 @@ export default function Wishlist() {
   const [wishlist, setWishlist] = useState<WishlistType | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedItem, setSelectedItem] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const { toast } = useToast()
 
   const fetchWishlist = useCallback(async () => {
@@ -32,8 +35,17 @@ export default function Wishlist() {
 
   const handleUpdateQuantity = async (uniqueName: string, quantity: number) => {
     try {
-      const updated = await api.updateWishlistQuantity(uniqueName, quantity)
-      setWishlist(updated)
+      await api.updateWishlistQuantity(uniqueName, quantity)
+      // Optimistically update local state
+      setWishlist((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          items: prev.items.map((item) =>
+            item.uniqueName === uniqueName ? { ...item, quantity } : item
+          ),
+        }
+      })
     } catch (err) {
       toast({
         title: 'Failed to update quantity',
@@ -46,8 +58,15 @@ export default function Wishlist() {
 
   const handleRemove = async (uniqueName: string) => {
     try {
-      const updated = await api.removeFromWishlist(uniqueName)
-      setWishlist(updated)
+      await api.removeFromWishlist(uniqueName)
+      // Optimistically update local state
+      setWishlist((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          items: prev.items.filter((item) => item.uniqueName !== uniqueName),
+        }
+      })
       toast({
         title: 'Item removed',
         description: 'Item has been removed from your wishlist.',
@@ -59,6 +78,11 @@ export default function Wishlist() {
         variant: 'destructive',
       })
     }
+  }
+
+  const handleViewDetails = (uniqueName: string) => {
+    setSelectedItem(uniqueName)
+    setDialogOpen(true)
   }
 
   if (loading) {
@@ -127,6 +151,7 @@ export default function Wishlist() {
                   item={item}
                   onUpdateQuantity={handleUpdateQuantity}
                   onRemove={handleRemove}
+                  onViewDetails={handleViewDetails}
                 />
               ))}
             </div>
@@ -136,6 +161,12 @@ export default function Wishlist() {
           </div>
         </div>
       )}
+
+      <ItemDetailDialog
+        uniqueName={selectedItem}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   )
 }

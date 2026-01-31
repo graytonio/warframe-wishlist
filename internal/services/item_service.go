@@ -63,3 +63,14 @@ func (s *ItemService) GetByUniqueName(ctx context.Context, uniqueName string) (*
 
 	return item, nil
 }
+
+func (s *ItemService) SearchReusableBlueprints(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error) {
+	logger.Debug(ctx, "service: ItemService.SearchReusableBlueprints called", "query", query, "limit", limit)
+	results, err := s.repo.SearchReusableBlueprints(ctx, query, limit)
+	if err != nil {
+		logger.Error(ctx, "service: ItemService.SearchReusableBlueprints - repository error", "error", err)
+		return nil, err
+	}
+	logger.Debug(ctx, "service: ItemService.SearchReusableBlueprints - completed", "resultCount", len(results))
+	return results, nil
+}

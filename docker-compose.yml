@@ -22,7 +22,7 @@ services:
       - MONGO_URI=mongodb://mongodb:27017
       - MONGO_DATABASE=warframe
       - SUPABASE_URL=https://lpqitpotjqilkjupjrby.supabase.co
-      - SUPABASE_JWT_PUBLIC_KEY={"crv":"P-256","kty":"EC","x":"M5Sjqn5zwC9Kl1zVfUUGvv9boQjCGd45G8sdopBExB4","y":"P6IXMvA2WYXSHSOMTBH2jsw_9rrzGy89FjPf6oOsIxQ"}
+      - SUPABASE_JWT_PUBLIC_KEY={"x":"Jbyx6pk671geFSLcGAmjuLOw2ShrQI6ssuFzbU68ghM","y":"UcyftzYqV5oQUR1kd7Wmc7A16TENIRHhcs5LsDAjt-g","alg":"ES256","crv":"P-256","ext":true,"kid":"db204d5b-ac12-42a3-a2a1-3659f50ba96b","kty":"EC","key_ops":["verify"]}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     depends_on:
       - mongodb

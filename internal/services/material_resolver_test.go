@@ -18,7 +18,7 @@ func TestMaterialResolver_GetMaterials_EmptyWishlist(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -49,7 +49,7 @@ func TestMaterialResolver_GetMaterials_WishlistWithEmptyItems(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -85,7 +85,7 @@ func TestMaterialResolver_GetMaterials_SimpleItem(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -131,7 +131,7 @@ func TestMaterialResolver_GetMaterials_ItemWithComponents(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -188,7 +188,7 @@ func TestMaterialResolver_GetMaterials_MultipleQuantity(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -245,7 +245,7 @@ func TestMaterialResolver_GetMaterials_NestedComponents(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -271,7 +271,7 @@ func TestMaterialResolver_GetMaterials_RepositoryError(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	_, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err == nil {
@@ -296,7 +296,7 @@ func TestMaterialResolver_GetMaterials_ItemNotInRepository(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -352,7 +352,7 @@ func TestMaterialResolver_GetMaterials_CycleDetection(t *testing.T) {
 		},
 	}
 
-	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo)
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, nil)
 	result, err := resolver.GetMaterials(context.Background(), "user-123")
 
 	if err != nil {
@@ -361,5 +361,140 @@ func TestMaterialResolver_GetMaterials_CycleDetection(t *testing.T) {
 
 	if result == nil {
 		t.Fatal("expected result but got nil")
+	}
+}
+
+func TestMaterialResolver_GetMaterials_ExcludesOwnedBlueprints(t *testing.T) {
+	mockItemRepo := &mocks.MockItemRepository{
+		FindByUniqueNamesFunc: func(ctx context.Context, uniqueNames []string) (map[string]*models.Item, error) {
+			return map[string]*models.Item{
+				"/Lotus/Warframe": {
+					UniqueName: "/Lotus/Warframe",
+					Name:       "Test Warframe",
+					BuildPrice: 25000,
+					Components: []models.Component{
+						{UniqueName: "/Lotus/ReusableBlueprint", Name: "Reusable Blueprint", ItemCount: 1},
+						{UniqueName: "/Lotus/Resource1", Name: "Resource 1", ItemCount: 100},
+					},
+				},
+			}, nil
+		},
+		FindByUniqueNameFunc: func(ctx context.Context, uniqueName string) (*models.Item, error) {
+			if uniqueName == "/Lotus/ReusableBlueprint" {
+				return &models.Item{
+					UniqueName:     "/Lotus/ReusableBlueprint",
+					Name:           "Reusable Blueprint",
+					ConsumeOnBuild: false,
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	mockWishlistRepo := &mocks.MockWishlistRepository{
+		GetByUserIDFunc: func(ctx context.Context, userID string) (*models.Wishlist, error) {
+			return &models.Wishlist{
+				UserID: userID,
+				Items: []models.WishlistItem{
+					{UniqueName: "/Lotus/Warframe", Quantity: 1, AddedAt: time.Now()},
+				},
+			}, nil
+		},
+	}
+	mockOwnedBPRepo := &mocks.MockOwnedBlueprintsRepository{
+		GetByUserIDFunc: func(ctx context.Context, userID string) (*models.OwnedBlueprints, error) {
+			return &models.OwnedBlueprints{
+				UserID: userID,
+				Blueprints: []models.OwnedBlueprint{
+					{UniqueName: "/Lotus/ReusableBlueprint"},
+				},
+			}, nil
+		},
+	}
+
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, mockOwnedBPRepo)
+	result, err := resolver.GetMaterials(context.Background(), "user-123")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should only have Resource1, not the owned ReusableBlueprint
+	if len(result.Materials) != 1 {
+		t.Errorf("expected 1 material (owned blueprint excluded), got %d", len(result.Materials))
+	}
+
+	for _, mat := range result.Materials {
+		if mat.UniqueName == "/Lotus/ReusableBlueprint" {
+			t.Error("owned blueprint should be excluded from materials")
+		}
+	}
+}
+
+func TestMaterialResolver_GetMaterials_IncludesNonOwnedReusableBlueprints(t *testing.T) {
+	mockItemRepo := &mocks.MockItemRepository{
+		FindByUniqueNamesFunc: func(ctx context.Context, uniqueNames []string) (map[string]*models.Item, error) {
+			return map[string]*models.Item{
+				"/Lotus/Warframe": {
+					UniqueName: "/Lotus/Warframe",
+					Name:       "Test Warframe",
+					BuildPrice: 25000,
+					Components: []models.Component{
+						{UniqueName: "/Lotus/ReusableBlueprint", Name: "Reusable Blueprint", ItemCount: 1},
+					},
+				},
+			}, nil
+		},
+		FindByUniqueNameFunc: func(ctx context.Context, uniqueName string) (*models.Item, error) {
+			if uniqueName == "/Lotus/ReusableBlueprint" {
+				return &models.Item{
+					UniqueName:     "/Lotus/ReusableBlueprint",
+					Name:           "Reusable Blueprint",
+					ConsumeOnBuild: false,
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	mockWishlistRepo := &mocks.MockWishlistRepository{
+		GetByUserIDFunc: func(ctx context.Context, userID string) (*models.Wishlist, error) {
+			return &models.Wishlist{
+				UserID: userID,
+				Items: []models.WishlistItem{
+					{UniqueName: "/Lotus/Warframe", Quantity: 1, AddedAt: time.Now()},
+				},
+			}, nil
+		},
+	}
+	mockOwnedBPRepo := &mocks.MockOwnedBlueprintsRepository{
+		GetByUserIDFunc: func(ctx context.Context, userID string) (*models.OwnedBlueprints, error) {
+			return &models.OwnedBlueprints{
+				UserID:     userID,
+				Blueprints: []models.OwnedBlueprint{},
+			}, nil
+		},
+	}
+
+	resolver := NewMaterialResolver(mockItemRepo, mockWishlistRepo, mockOwnedBPRepo)
+	result, err := resolver.GetMaterials(context.Background(), "user-123")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should include the non-owned reusable blueprint
+	if len(result.Materials) != 1 {
+		t.Errorf("expected 1 material (non-owned reusable blueprint), got %d", len(result.Materials))
+	}
+
+	found := false
+	for _, mat := range result.Materials {
+		if mat.UniqueName == "/Lotus/ReusableBlueprint" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("non-owned reusable blueprint should be included in materials")
 	}
 }

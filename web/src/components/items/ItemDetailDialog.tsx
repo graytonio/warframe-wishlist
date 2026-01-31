@@ -1,6 +1,52 @@
-import { useState, useEffect } from 'react'
-import type { Item } from '@/lib/api'
+import { useState, useEffect, useMemo } from 'react'
+import type { Item, Component } from '@/lib/api'
 import { api } from '@/lib/api'
+
+interface RawMaterial {
+  uniqueName: string
+  name: string
+  imageName?: string
+  totalCount: number
+}
+
+// Recursively resolve raw materials (components with no sub-components)
+function resolveRawMaterials(components: Component[] | undefined, multiplier = 1): Map<string, RawMaterial> {
+  const materials = new Map<string, RawMaterial>()
+
+  if (!components) return materials
+
+  for (const comp of components) {
+    const count = comp.itemCount * multiplier
+
+    if (comp.components && comp.components.length > 0) {
+      // Has sub-components, recurse
+      const subMaterials = resolveRawMaterials(comp.components, count)
+      for (const [key, mat] of subMaterials) {
+        const existing = materials.get(key)
+        if (existing) {
+          existing.totalCount += mat.totalCount
+        } else {
+          materials.set(key, { ...mat })
+        }
+      }
+    } else {
+      // Leaf material (no sub-components)
+      const existing = materials.get(comp.uniqueName)
+      if (existing) {
+        existing.totalCount += count
+      } else {
+        materials.set(comp.uniqueName, {
+          uniqueName: comp.uniqueName,
+          name: comp.name,
+          imageName: comp.imageName,
+          totalCount: count,
+        })
+      }
+    }
+  }
+
+  return materials
+}
 import {
   Dialog,
   DialogContent,
@@ -11,6 +57,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ItemImage, getItemImageUrl } from '@/components/ui/item-image'
 import { Plus, Minus, ExternalLink, ArrowLeft } from 'lucide-react'
 
 interface ItemDetailDialogProps {
@@ -60,9 +107,12 @@ export function ItemDetailDialog({
     setItemStack(itemStack.slice(0, -1))
   }
 
-  const imageUrl = item?.imageName
-    ? `https://cdn.warframestat.us/img/${item.imageName}`
-    : '/placeholder.png'
+  // Compute raw materials (leaf components with no sub-components)
+  const rawMaterials = useMemo(() => {
+    if (!item?.components) return []
+    const materialsMap = resolveRawMaterials(item.components)
+    return Array.from(materialsMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [item])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -85,13 +135,10 @@ export function ItemDetailDialog({
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 )}
-                <img
-                  src={imageUrl}
+                <ItemImage
+                  src={getItemImageUrl(item.imageName)}
                   alt={item.name}
-                  className="w-16 h-16 object-contain"
-                  onError={(e) => {
-                    e.currentTarget.src = '/placeholder.png'
-                  }}
+                  className="w-16 h-16"
                 />
                 <div>
                   <DialogTitle className="text-xl">{item.name}</DialogTitle>
@@ -128,13 +175,11 @@ export function ItemDetailDialog({
                           onClick={() => handleComponentClick(comp.uniqueName)}
                           className="flex items-center gap-2 p-2 bg-muted rounded-md hover:bg-muted/80 transition-colors cursor-pointer text-left"
                         >
-                          {comp.imageName && (
-                            <img
-                              src={`https://cdn.warframestat.us/img/${comp.imageName}`}
-                              alt={comp.name}
-                              className="w-8 h-8 object-contain"
-                            />
-                          )}
+                          <ItemImage
+                            src={getItemImageUrl(comp.imageName)}
+                            alt={comp.name}
+                            className="w-8 h-8"
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{comp.name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -147,13 +192,11 @@ export function ItemDetailDialog({
                           key={comp.uniqueName}
                           className="flex items-center gap-2 p-2 bg-muted rounded-md"
                         >
-                          {comp.imageName && (
-                            <img
-                              src={`https://cdn.warframestat.us/img/${comp.imageName}`}
-                              alt={comp.name}
-                              className="w-8 h-8 object-contain"
-                            />
-                          )}
+                          <ItemImage
+                            src={getItemImageUrl(comp.imageName)}
+                            alt={comp.name}
+                            className="w-8 h-8"
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{comp.name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -167,23 +210,52 @@ export function ItemDetailDialog({
                 </div>
               )}
 
+              {rawMaterials.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Raw Materials Needed</h4>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {rawMaterials.map((material) => (
+                      <div
+                        key={material.uniqueName}
+                        className="flex items-center gap-2 p-2 bg-muted rounded-md"
+                      >
+                        <ItemImage
+                          src={getItemImageUrl(material.imageName)}
+                          alt={material.name}
+                          className="w-8 h-8"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{material.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            x{material.totalCount.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {item.drops && item.drops.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">Drop Locations</h4>
                   <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {item.drops.slice(0, 10).map((drop, idx) => (
-                      <div
-                        key={idx}
-                        className="text-sm p-2 bg-muted rounded-md flex justify-between"
-                      >
-                        <span>{drop.location}</span>
-                        {drop.chance && (
-                          <span className="text-muted-foreground">
-                            {(drop.chance * 100).toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                    {[...item.drops]
+                      .sort((a, b) => (b.chance ?? 0) - (a.chance ?? 0))
+                      .slice(0, 10)
+                      .map((drop, idx) => (
+                        <div
+                          key={idx}
+                          className="text-sm p-2 bg-muted rounded-md flex justify-between"
+                        >
+                          <span>{drop.location}</span>
+                          {drop.chance && (
+                            <span className="text-muted-foreground">
+                              {(drop.chance * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     {item.drops.length > 10 && (
                       <p className="text-xs text-muted-foreground text-center">
                         +{item.drops.length - 10} more locations

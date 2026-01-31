@@ -13,8 +13,9 @@ import (
 )
 
 type mockItemService struct {
-	searchFunc          func(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error)
-	getByUniqueNameFunc func(ctx context.Context, uniqueName string) (*models.Item, error)
+	searchFunc                   func(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error)
+	getByUniqueNameFunc          func(ctx context.Context, uniqueName string) (*models.Item, error)
+	searchReusableBlueprintsFunc func(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error)
 }
 
 func (m *mockItemService) Search(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error) {
@@ -27,6 +28,13 @@ func (m *mockItemService) Search(ctx context.Context, params models.SearchParams
 func (m *mockItemService) GetByUniqueName(ctx context.Context, uniqueName string) (*models.Item, error) {
 	if m.getByUniqueNameFunc != nil {
 		return m.getByUniqueNameFunc(ctx, uniqueName)
+	}
+	return nil, nil
+}
+
+func (m *mockItemService) SearchReusableBlueprints(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error) {
+	if m.searchReusableBlueprintsFunc != nil {
+		return m.searchReusableBlueprintsFunc(ctx, query, limit)
 	}
 	return nil, nil
 }

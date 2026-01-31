@@ -7,8 +7,9 @@ import (
 )
 
 type MockItemService struct {
-	SearchFunc          func(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error)
-	GetByUniqueNameFunc func(ctx context.Context, uniqueName string) (*models.Item, error)
+	SearchFunc                   func(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error)
+	GetByUniqueNameFunc          func(ctx context.Context, uniqueName string) (*models.Item, error)
+	SearchReusableBlueprintsFunc func(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error)
 }
 
 func (m *MockItemService) Search(ctx context.Context, params models.SearchParams) ([]models.ItemSearchResult, error) {
@@ -21,6 +22,13 @@ func (m *MockItemService) Search(ctx context.Context, params models.SearchParams
 func (m *MockItemService) GetByUniqueName(ctx context.Context, uniqueName string) (*models.Item, error) {
 	if m.GetByUniqueNameFunc != nil {
 		return m.GetByUniqueNameFunc(ctx, uniqueName)
+	}
+	return nil, nil
+}
+
+func (m *MockItemService) SearchReusableBlueprints(ctx context.Context, query string, limit int) ([]models.ItemSearchResult, error) {
+	if m.SearchReusableBlueprintsFunc != nil {
+		return m.SearchReusableBlueprintsFunc(ctx, query, limit)
 	}
 	return nil, nil
 }
@@ -69,4 +77,47 @@ func (m *MockMaterialResolver) GetMaterials(ctx context.Context, userID string) 
 		return m.GetMaterialsFunc(ctx, userID)
 	}
 	return nil, nil
+}
+
+type MockOwnedBlueprintsService struct {
+	GetOwnedBlueprintsFunc func(ctx context.Context, userID string) (*models.OwnedBlueprints, error)
+	AddBlueprintFunc       func(ctx context.Context, userID string, req models.AddBlueprintRequest) error
+	RemoveBlueprintFunc    func(ctx context.Context, userID, uniqueName string) error
+	BulkAddBlueprintsFunc  func(ctx context.Context, userID string, req models.BulkAddBlueprintsRequest) error
+	ClearAllBlueprintsFunc func(ctx context.Context, userID string) error
+}
+
+func (m *MockOwnedBlueprintsService) GetOwnedBlueprints(ctx context.Context, userID string) (*models.OwnedBlueprints, error) {
+	if m.GetOwnedBlueprintsFunc != nil {
+		return m.GetOwnedBlueprintsFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *MockOwnedBlueprintsService) AddBlueprint(ctx context.Context, userID string, req models.AddBlueprintRequest) error {
+	if m.AddBlueprintFunc != nil {
+		return m.AddBlueprintFunc(ctx, userID, req)
+	}
+	return nil
+}
+
+func (m *MockOwnedBlueprintsService) RemoveBlueprint(ctx context.Context, userID, uniqueName string) error {
+	if m.RemoveBlueprintFunc != nil {
+		return m.RemoveBlueprintFunc(ctx, userID, uniqueName)
+	}
+	return nil
+}
+
+func (m *MockOwnedBlueprintsService) BulkAddBlueprints(ctx context.Context, userID string, req models.BulkAddBlueprintsRequest) error {
+	if m.BulkAddBlueprintsFunc != nil {
+		return m.BulkAddBlueprintsFunc(ctx, userID, req)
+	}
+	return nil
+}
+
+func (m *MockOwnedBlueprintsService) ClearAllBlueprints(ctx context.Context, userID string) error {
+	if m.ClearAllBlueprintsFunc != nil {
+		return m.ClearAllBlueprintsFunc(ctx, userID)
+	}
+	return nil
 }

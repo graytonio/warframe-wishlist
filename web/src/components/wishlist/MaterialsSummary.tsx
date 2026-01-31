@@ -3,6 +3,7 @@ import type { MaterialsResponse } from '@/lib/api'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ItemImage, getItemImageUrl } from '@/components/ui/item-image'
 import { RefreshCw } from 'lucide-react'
 
 export function MaterialsSummary() {
@@ -93,21 +94,16 @@ export function MaterialsSummary() {
         <div className="space-y-2">
           <h4 className="text-sm font-medium">Materials</h4>
           <div className="grid gap-2 max-h-96 overflow-y-auto">
-            {materials.materials.map((material) => (
+            {[...materials.materials].sort((a, b) => b.totalCount - a.totalCount).map((material) => (
               <div
                 key={material.uniqueName}
                 className="flex items-center gap-3 p-2 bg-muted rounded-md"
               >
-                {material.imageName && (
-                  <img
-                    src={`https://cdn.warframestat.us/img/${material.imageName}`}
-                    alt={material.name}
-                    className="w-8 h-8 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none'
-                    }}
-                  />
-                )}
+                <ItemImage
+                  src={getItemImageUrl(material.imageName)}
+                  alt={material.name}
+                  className="w-8 h-8"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{material.name}</p>
                 </div>
