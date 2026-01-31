@@ -258,20 +258,24 @@ func (r *MaterialResolver) resolveItemInternal(ctx context.Context, item *models
 		}
 
 		if len(componentItem.Components) == 0 {
-			// Check if this is a non-consumable item (reusable blueprint) that user already owns
-			if !componentItem.ConsumeOnBuild && ownedBlueprintsSet[component.UniqueName] {
+			// Determine if this is actually a reusable blueprint
+			// A reusable blueprint must have ConsumeOnBuild=false AND be a blueprint-type item
+			isReusableBlueprint := !componentItem.ConsumeOnBuild && isLikelyBlueprint(componentItem)
+
+			// Check if this is a reusable blueprint that user already owns
+			if isReusableBlueprint && ownedBlueprintsSet[component.UniqueName] {
 				logger.Debug(ctx, "service: MaterialResolver.resolveItem - user already owns this reusable blueprint, skipping", "uniqueName", component.UniqueName)
 				continue
 			}
 
-			// Check if this is a non-consumable item (reusable blueprint)
-			if !componentItem.ConsumeOnBuild && nonConsumableCounted[component.UniqueName] {
+			// Check if this is a reusable blueprint already counted
+			if isReusableBlueprint && nonConsumableCounted[component.UniqueName] {
 				logger.Debug(ctx, "service: MaterialResolver.resolveItem - non-consumable already counted, skipping", "uniqueName", component.UniqueName)
 				continue
 			}
 
 			countToAdd := componentCount
-			if !componentItem.ConsumeOnBuild {
+			if isReusableBlueprint {
 				// Non-consumable items only need 1 regardless of quantity
 				countToAdd = 1
 				nonConsumableCounted[component.UniqueName] = true
