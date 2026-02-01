@@ -111,12 +111,18 @@ export function ItemDetailDialog({
   const rawMaterials = useMemo(() => {
     if (!item?.components) return []
     const materialsMap = resolveRawMaterials(item.components)
-    return Array.from(materialsMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+    // Sort by quantity (descending), then by name
+    return Array.from(materialsMap.values()).sort((a, b) => {
+      if (b.totalCount !== a.totalCount) {
+        return b.totalCount - a.totalCount
+      }
+      return a.name.localeCompare(b.name)
+    })
   }, [item])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl lg:max-w-4xl max-h-[80vh] lg:max-h-[90vh] overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -213,7 +219,7 @@ export function ItemDetailDialog({
               {rawMaterials.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">Raw Materials Needed</h4>
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                     {rawMaterials.map((material) => (
                       <div
                         key={material.uniqueName}
